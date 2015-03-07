@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/">
+        <file>images/rotation.png</file>
+        <file>images/transform-move-icon.png</file>
+        <file>images/transform-rotate-icon.png</file>
+        <file>images/transform-scale-icon.png</file>
+    </qresource>
+</RCC>
