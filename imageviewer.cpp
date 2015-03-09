@@ -39,11 +39,12 @@
 ****************************************************************************/
 
 #include <QtWidgets>
+#include <QtConcurrent/QtConcurrent>
 
 #include "imageviewer.h"
 #include "ibf.h"
 
-ImageViewer::ImageViewer()
+ImageViewer::ImageViewer() : ibfLoadedFutureWatcher(this)
 {
     canvas = new Canvas;
     canvas->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
@@ -55,6 +56,9 @@ ImageViewer::ImageViewer()
 
     resize(QGuiApplication::primaryScreen()->availableSize() * 3 / 5);
 
+    connect(&ibfLoadedFutureWatcher, SIGNAL(finished()), this, SLOT(ibLoadFinished()));
+    ibfLoadedFutureWatcher.setFuture(ibfLoadedFuture);
+
     statusBar()->showMessage(tr("Ready"));
 
     // debug mode
@@ -64,11 +68,11 @@ ImageViewer::ImageViewer()
 bool ImageViewer::loadFile(const QString& filename)
 {
     try {
-        IBF ibf(filename);
-        if (loadFile(ibf)) {
-            loadedFile = filename;
-            return true;
-        }
+        if (ibfLoadedFuture.isRunning())
+            return false;
+        ibfLoadedFuture = QtConcurrent::run(LoadFromDisk, filename);
+        loadedFile = filename;
+        return true;
     }
     catch (...) {
         QMessageBox::information(this, QGuiApplication::applicationDisplayName(),
@@ -90,6 +94,30 @@ bool ImageViewer::loadFile(const IBF& ibf)
     saveAct->setEnabled(true);
     xformToolBar->setEnabled(true);
     return true;
+}
+
+IBF* ImageViewer::LoadFromDisk(const QString &filename)
+{
+    try {
+        IBF* ibf = new IBF(filename);
+        return ibf;
+    }
+    catch (...) {
+        return 0;
+    }
+}
+
+void ImageViewer::ibLoadFinished()
+{
+    static bool b = false;
+    if (!b) {
+        b = true;
+        return;
+    }
+    //QObject* sndr = sender();
+    IBF* ibf(ibfLoadedFuture);
+    loadFile(*ibf);
+    delete ibf;
 }
 
 bool ImageViewer::saveFile(const QImage& image, const QMatrix4x4& xform, const QString& name, const QString& targetFilename)

@@ -126,56 +126,56 @@ bool IBF::load(const QString &IBFFilename)
         return false;
 
     QByteArray data = file.readAll();
+    unsigned char* bytes = (unsigned char*)(data.data());
 
     file.close();
 
     if (data[0] != 'I' || data[1] != 'B' || data[2] != 'F')
         return false;
 
-    _version = (int)(data[3]);
+    _version = bytes[3];
     if (0x1 != _version)
         return false;
 
     const int headerlen = (
-        (((int)(data[4])) << 24) |
-        (((int)(data[5])) << 16) |
-        (((int)(data[6])) << 8) |
-        ((int)(data[7])) );
+        (bytes[4] << 24) |
+        (bytes[5] << 16) |
+        (bytes[6] << 8) |
+        (bytes[7]) );
     const int namelen = (
-        (((int)(data[8])) << 24) |
-        (((int)(data[9])) << 16) |
-        (((int)(data[10])) << 8) |
-        ((int)(data[11])) );
+        (bytes[8] << 24) |
+        (bytes[9] << 16) |
+        (bytes[10] << 8) |
+        (bytes[11]) );
 
     QByteArray name;
     for (int i=0; i<namelen; ++i)
-        name.push_back((char)(data[12+i]));
+        name.push_back((char)(bytes[12+i]));
     _name = QString(name);
 
-    _format = (format)((int)(data[namelen+12]));
+    _format = (format)(bytes[namelen+12]);
     if (format::R8G8B8A8 != _format)
         return false;
 
     _width = (
-        (((int)(data[namelen+13])) << 24) |
-        (((int)(data[namelen+14])) << 16) |
-        (((int)(data[namelen+15])) << 8) |
-        ((int)(data[namelen+16])) );
+        (bytes[namelen+13] << 24) |
+        (bytes[namelen+14] << 16) |
+        (bytes[namelen+15] << 8) |
+        (bytes[namelen+16]) );
 
     _height = (
-        (((int)(data[namelen+17])) << 24) |
-        (((int)(data[namelen+18])) << 16) |
-        (((int)(data[namelen+19])) << 8) |
-        ((int)(data[namelen+20])) );
+        (bytes[namelen+17] << 24) |
+        (bytes[namelen+18] << 16) |
+        (bytes[namelen+19] << 8) |
+        (bytes[namelen+20]) );
 
-    unsigned char* bytes = (unsigned char*)(data.data());
-    bytes = &bytes[namelen+21];
+    unsigned char* xformBytes = &bytes[namelen+21];
     float* at = new float[16];
     for (int i=0; i<16; ++i) {
-        const unsigned char b0 = bytes[4*i];
-        const unsigned char b1 = bytes[4*i+1];
-        const unsigned char b2 = bytes[4*i+2];
-        const unsigned char b3 = bytes[4*i+3];
+        const unsigned char b0 = xformBytes[4*i];
+        const unsigned char b1 = xformBytes[4*i+1];
+        const unsigned char b2 = xformBytes[4*i+2];
+        const unsigned char b3 = xformBytes[4*i+3];
         const uint n0 = ( /*(*((uint*)&*/b0/*))*/ << 24 );
         const uint n1 = ( /*(*((uint*)&*/b1/*))*/ << 16 );
         const uint n2 = ( /*(*((uint*)&*/b2/*))*/ << 8 );
@@ -190,10 +190,10 @@ bool IBF::load(const QString &IBFFilename)
     delete [] at;
 
     const int datalen = (
-        (((int)(data[namelen+85])) << 24) |
-        (((int)(data[namelen+86])) << 16) |
-        (((int)(data[namelen+87])) << 8) |
-        ((int)(data[namelen+88])) );
+        (bytes[namelen+85] << 24) |
+        (bytes[namelen+86] << 16) |
+        (bytes[namelen+87] << 8) |
+        (bytes[namelen+88]) );
 
     if (datalen != _width * _height * 4)
         return false;
