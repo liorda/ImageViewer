@@ -55,6 +55,7 @@ public:
     bool save(const QString& targetFilename) const;
     const QString& name() const { return _name; }
     bool ToPixmap(QPixmap* pixmap) const;
+    const QMatrix4x4& Transform() const { return _xform; }
 
 private:
     bool load(const QString& IBFFilename);

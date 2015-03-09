@@ -74,8 +74,9 @@ bool IBF::save(const QString& targetFilename) const
     arr[20+namelen] = h & 0xFF;
 
     for (int i=0; i<16; ++i) {
-        const float f = (float)(_xform.data()[i]);
-        const uint n = *(uint*)(&f);
+        const float* rawData = _xform.constData();
+        const float f = rawData[i];
+        const uint n = *((uint*)(&f));
         arr[21+namelen+4*i] = (n >> 24) & 0xFF;
         arr[21+namelen+4*i+1] = (n >> 16) & 0xFF;
         arr[21+namelen+4*i+2] = (n >> 8) & 0xFF;
@@ -167,17 +168,25 @@ bool IBF::load(const QString &IBFFilename)
         (((int)(data[namelen+19])) << 8) |
         ((int)(data[namelen+20])) );
 
+    unsigned char* bytes = (unsigned char*)(data.data());
+    bytes = &bytes[namelen+21];
     float* at = new float[16];
     for (int i=0; i<16; ++i) {
-        const uint n = (
-            (((uint)(data[namelen+21+4*i])) << 24) |
-            (((uint)(data[namelen+21+4*i+1])) << 16) |
-            (((uint)(data[namelen+21+4*i+2])) << 8) |
-            ((uint)(data[namelen+21+4*i+3])) );
+        const unsigned char b0 = bytes[4*i];
+        const unsigned char b1 = bytes[4*i+1];
+        const unsigned char b2 = bytes[4*i+2];
+        const unsigned char b3 = bytes[4*i+3];
+        const uint n0 = ( /*(*((uint*)&*/b0/*))*/ << 24 );
+        const uint n1 = ( /*(*((uint*)&*/b1/*))*/ << 16 );
+        const uint n2 = ( /*(*((uint*)&*/b2/*))*/ << 8 );
+        const uint n3 = ( /*(*((uint*)&*/b3/*))*/ );
+        const uint n = n0 | n1 | n2 | n3;
         const float f = *(float*)(&n);
         at[i] = f;
     }
-    _xform = QMatrix4x4(at);
+    _xform = QMatrix4x4(at); // this c'tor is assuming row-major order
+    _xform = _xform.transposed();
+
     delete [] at;
 
     const int datalen = (

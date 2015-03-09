@@ -85,7 +85,7 @@ bool ImageViewer::loadFile(const IBF& ibf)
     canvas->SetPixmap(orig);
     canvas->adjustSize();
     setWindowFilePath(ibf.name());
-    xformPending.reset();
+    xformPending = ibf.Transform().toTransform();
     canvas->Transform(xformPending);
     saveAct->setEnabled(true);
     xformToolBar->setEnabled(true);
