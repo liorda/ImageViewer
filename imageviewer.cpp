@@ -57,7 +57,6 @@ ImageViewer::ImageViewer() : ibfLoadedFutureWatcher(this)
     resize(QGuiApplication::primaryScreen()->availableSize() * 3 / 5);
 
     connect(&ibfLoadedFutureWatcher, SIGNAL(finished()), this, SLOT(ibLoadFinished()));
-    ibfLoadedFutureWatcher.setFuture(ibfLoadedFuture);
 
     statusBar()->showMessage(tr("Ready"));
 
@@ -68,9 +67,10 @@ ImageViewer::ImageViewer() : ibfLoadedFutureWatcher(this)
 bool ImageViewer::loadFile(const QString& filename)
 {
     try {
-        if (ibfLoadedFuture.isRunning())
+        if (ibfLoadedFutureWatcher.isRunning())
             return false;
-        ibfLoadedFuture = QtConcurrent::run(LoadFromDisk, filename);
+        QFuture<IBF*> ibfLoadedFuture = QtConcurrent::run(LoadFromDisk, filename);
+        ibfLoadedFutureWatcher.setFuture(ibfLoadedFuture);
         loadedFile = filename;
         return true;
     }
@@ -109,13 +109,7 @@ IBF* ImageViewer::LoadFromDisk(const QString &filename)
 
 void ImageViewer::ibLoadFinished()
 {
-    static bool b = false;
-    if (!b) {
-        b = true;
-        return;
-    }
-    //QObject* sndr = sender();
-    IBF* ibf(ibfLoadedFuture);
+    IBF* ibf = ibfLoadedFutureWatcher.result();
     loadFile(*ibf);
     delete ibf;
 }

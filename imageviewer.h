@@ -69,7 +69,6 @@ public:
     static IBF* LoadFromDisk(const QString& filename);
 
 private:
-    QFuture<IBF*> ibfLoadedFuture;
     QFutureWatcher<IBF*> ibfLoadedFutureWatcher;
 
 private:
