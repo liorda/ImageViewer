@@ -176,10 +176,10 @@ bool IBF::load(const QString &IBFFilename)
         const unsigned char b1 = xformBytes[4*i+1];
         const unsigned char b2 = xformBytes[4*i+2];
         const unsigned char b3 = xformBytes[4*i+3];
-        const uint n0 = ( /*(*((uint*)&*/b0/*))*/ << 24 );
-        const uint n1 = ( /*(*((uint*)&*/b1/*))*/ << 16 );
-        const uint n2 = ( /*(*((uint*)&*/b2/*))*/ << 8 );
-        const uint n3 = ( /*(*((uint*)&*/b3/*))*/ );
+        const uint n0 = ( b0 << 24 );
+        const uint n1 = ( b1 << 16 );
+        const uint n2 = ( b2 << 8 );
+        const uint n3 = ( b3 );
         const uint n = n0 | n1 | n2 | n3;
         const float f = *(float*)(&n);
         at[i] = f;
