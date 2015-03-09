@@ -43,116 +43,96 @@
 #include "imageviewer.h"
 #include "ibf.h"
 
-//! [0]
 ImageViewer::ImageViewer()
 {
-    imageLabel = new QLabel;
-    imageLabel->setBackgroundRole(QPalette::Base);
-    imageLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
-    imageLabel->setScaledContents(true);
-
-    scrollArea = new QScrollArea;
-    scrollArea->setBackgroundRole(QPalette::Dark);
-    scrollArea->setWidget(imageLabel);
-    setCentralWidget(scrollArea);
+    canvas = new Canvas;
+    canvas->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
+    setCentralWidget(canvas);
 
     createActions();
     createMenus();
     createToolBars();
 
     resize(QGuiApplication::primaryScreen()->availableSize() * 3 / 5);
+
+    statusBar()->showMessage(tr("Ready"));
+
+    // debug mode
+    //loadFile("c:\\Users\\Public\\Pictures\\Jellyfish.ibf");
 }
-
-//! [0]
-//! [2]
-/*
-bool ImageViewer::loadFile(const QString &fileName)
-{
-    QImage image(fileName);
-    if (image.isNull()) {
-        QMessageBox::information(this, QGuiApplication::applicationDisplayName(),
-                                 tr("Cannot load %1.").arg(QDir::toNativeSeparators(fileName)));
-        setWindowFilePath(QString());
-        imageLabel->setPixmap(QPixmap());
-        imageLabel->adjustSize();
-        return false;
-    }
-//! [2] //! [3]
-    imageLabel->setPixmap(QPixmap::fromImage(image));
-//! [3] //! [4]
-    scaleFactor = 1.0;
-
-    //printAct->setEnabled(true);
-    //fitToWindowAct->setEnabled(true);
-    updateActions();
-
-    //if (!fitToWindowAct->isChecked())
-        imageLabel->adjustSize();
-
-    setWindowFilePath(fileName);
-    return true;
-}
-*/
 
 bool ImageViewer::loadFile(const QString& filename)
 {
     try {
-        ImageViewerNS::IBF ibf(filename);
-        QPixmap pixmap;
-        ibf.ToPixmap(&pixmap);
-        imageLabel->setPixmap(pixmap);
-        imageLabel->adjustSize();
-        setWindowFilePath(ibf.name());
-/*
-        QImage image(fileName);
-        if (image.isNull()) {
-            QMessageBox::information(this, QGuiApplication::applicationDisplayName(),
-                                     tr("Cannot load %1.").arg(QDir::toNativeSeparators(fileName)));
-            setWindowFilePath(QString());
-            imageLabel->setPixmap(QPixmap());
-            imageLabel->adjustSize();
-            return false;
+        IBF ibf(filename);
+        if (loadFile(ibf)) {
+            loadedFile = filename;
+            return true;
         }
-    //! [2] //! [3]
-        imageLabel->setPixmap(QPixmap::fromImage(image));
-    //! [3] //! [4]
-        scaleFactor = 1.0;
-
-        //printAct->setEnabled(true);
-        //fitToWindowAct->setEnabled(true);
-        updateActions();
-
-        //if (!fitToWindowAct->isChecked())
-            imageLabel->adjustSize();
-
-        setWindowFilePath(fileName);
-        */
-        return true;
     }
     catch (...) {
         QMessageBox::information(this, QGuiApplication::applicationDisplayName(),
                                  tr("Cannot load %1.").arg(QDir::toNativeSeparators(filename)));
-        return false;
     }
-
+    return false;
 }
 
-//! [4]
+bool ImageViewer::loadFile(const IBF& ibf)
+{
+    QPixmap orig;
+    if (!ibf.ToPixmap(&orig))
+        return false;
+    canvas->SetPixmap(orig);
+    canvas->adjustSize();
+    setWindowFilePath(ibf.name());
+    xformPending.reset();
+    canvas->Transform(xformPending);
+    saveAct->setEnabled(true);
+    xformToolBar->setEnabled(true);
+    return true;
+}
 
-//! [2]
+bool ImageViewer::saveFile(const QImage& image, const QMatrix4x4& xform, const QString& name, const QString& targetFilename)
+{
+    IBF ibf(image, name, xform);
 
-//! [1]
-void ImageViewer::open()
+    if (ibf.save(targetFilename))
+        return loadFile(targetFilename);
+
+    return false;
+}
+
+void ImageViewer::load()
 {
     const QStringList picturesLocations = QStandardPaths::standardLocations(QStandardPaths::PicturesLocation);
-    QFileDialog dialog(this, tr("Open File"),
+    QFileDialog dialog(this, tr("Load File"),
                        picturesLocations.isEmpty() ? QDir::currentPath() : picturesLocations.first());
     dialog.setAcceptMode(QFileDialog::AcceptOpen);
     dialog.setNameFilter(tr("IBF files (*.ibf)"));
 
     while (dialog.exec() == QDialog::Accepted && !loadFile(dialog.selectedFiles().first())) {}
 }
-//! [1]
+
+void ImageViewer::saveAs()
+{
+    if (loadedFile.isNull() || loadedFile.isEmpty())
+        return;
+
+    if (canvas->GetPixmap().isNull())
+        return;
+
+    QString targetFilename = QFileDialog::getSaveFileName(this, tr("Select target"), loadedFile, tr("IBF files (*.ibf)"));
+    if (targetFilename.isNull() || targetFilename.isEmpty())
+        return;
+
+    bool ok;
+    QFileInfo targetInfo(loadedFile);
+    QString targetName = QInputDialog::getText(this, tr("IBF Viewer"), tr("Image name"), QLineEdit::Normal, targetInfo.baseName(), &ok);
+    if (!ok || targetName.isNull() || targetName.isEmpty())
+        return;
+
+    saveFile(canvas->GetPixmap().toImage(), xformPending, targetName, targetFilename);
+}
 
 void ImageViewer::encode()
 {
@@ -171,134 +151,129 @@ void ImageViewer::encode()
     if (dialog.exec() == QDialog::Accepted) {
         QString selected = dialog.selectedFiles().first();
         QImage image(selected);
-        bool ok;
         QFileInfo selectedTargetInfo(selected);
-        QString target = selectedTargetInfo.baseName();
-        QString name = QInputDialog::getText(this, tr("IBF Viewer"), tr("Image name"), QLineEdit::Normal, target, &ok);
-        if (ok) {
-            QMatrix4x4 xform; // identity by default
-            ImageViewerNS::IBF ibf(image, name, xform);
-            QString output_file_location = QFileDialog::getSaveFileName(this, tr("Select target"), selectedTargetInfo.baseName(), tr("IBF files (*.ibf)"));
-            if (ibf.save(output_file_location))
-                loadFile(output_file_location);
+        bool ok;
+        QString targetName = QInputDialog::getText(this, tr("IBF Viewer"), tr("Image name"), QLineEdit::Normal, selectedTargetInfo.baseName(), &ok);
+        if (ok)
+        {
+            IBF ibf(image, targetName, QMatrix4x4());
+            QString targetFilename = QFileDialog::getSaveFileName(this, tr("Select target"), selectedTargetInfo.canonicalPath() + "/" + selectedTargetInfo.baseName(), tr("IBF files (*.ibf)"));
+            if (targetFilename.isNull() || targetFilename.isEmpty())
+                return;
+            if (!ibf.save(targetFilename))
+                return;
+            loadFile(ibf);
+            loadedFile = targetFilename;
         }
     }
 }
 
-//! [5]
-/*
-void ImageViewer::print()
-//! [5] //! [6]
-{
-    Q_ASSERT(imageLabel->pixmap());
-}
-//! [8]
-
-//! [9]
-void ImageViewer::zoomIn()
-//! [9] //! [10]
-{
-    scaleImage(1.25);
-}
-
-void ImageViewer::zoomOut()
-{
-    scaleImage(0.8);
-}
-
-//! [10] //! [11]
-void ImageViewer::normalSize()
-//! [11] //! [12]
-{
-    imageLabel->adjustSize();
-    scaleFactor = 1.0;
-}
-//! [12]
-
-//! [13]
-void ImageViewer::fitToWindow()
-//! [13] //! [14]
-{
-    bool fitToWindow = fitToWindowAct->isChecked();
-    scrollArea->setWidgetResizable(fitToWindow);
-    if (!fitToWindow) {
-        normalSize();
-    }
-    updateActions();
-}
-//! [14]
-*/
-
-//! [15]
 void ImageViewer::about()
-//! [15] //! [16]
 {
     QMessageBox::about(this, tr("About Image Viewer"),
-            tr("<p>The <b>Image Viewer</b> example shows how to combine QLabel "
-               "and QScrollArea to display an image. QLabel is typically used "
-               "for displaying a text, but it can also display an image. "
-               "QScrollArea provides a scrolling view around another widget. "
-               "If the child widget exceeds the size of the frame, QScrollArea "
-               "automatically provides scroll bars. </p><p>The example "
-               "demonstrates how QLabel's ability to scale its contents "
-               "(QLabel::scaledContents), and QScrollArea's ability to "
-               "automatically resize its contents "
-               "(QScrollArea::widgetResizable), can be used to implement "
-               "zooming and scaling features. </p><p>In addition the example "
-               "shows how to use QPainter to print an image.</p>"));
+            tr("<p>The <b>Image Viewer</b>!</p>"));
 }
-//! [16]
 
 void ImageViewer::setXFormTranslation()
-{}
-void ImageViewer::setXFormRotation()
-{}
-void ImageViewer::setXFormScale()
-{}
-
-//! [17]
-void ImageViewer::createActions()
-//! [17] //! [18]
 {
-    openAct = new QAction(tr("&Open..."), this);
-    openAct->setShortcut(tr("Ctrl+O"));
-    connect(openAct, SIGNAL(triggered()), this, SLOT(open()));
+    xformControl = TRANSLATE;
+}
+void ImageViewer::setXFormRotation()
+{
+    xformControl = ROTATE;
+}
+
+void ImageViewer::setXFormScale()
+{
+    xformControl = SCALE;
+}
+
+void ImageViewer::resetTransformations()
+{
+    xformPending.reset();
+    canvas->Transform(xformPending);
+}
+
+void ImageViewer::mousePressEvent(QMouseEvent *event)
+{
+    lastMousePos = event->pos();
+    firstMousePos = event->pos();
+}
+
+void ImageViewer::mouseMoveEvent(QMouseEvent *e)
+{
+    int dx = e->x() - lastMousePos.x();
+    int dy = e->y() - lastMousePos.y();
+    float fdx = (float)dx;
+    float fdy = (float)dy;
+
+    if (e->buttons() & Qt::LeftButton) {
+        QTransform x;
+        switch (xformControl)
+        {
+        case TRANSLATE:
+        {
+            x.translate(fdx, fdy);
+
+            QString msg;
+            msg.sprintf("Translating (%.2f,%.2f)", fdx, fdy);
+            statusBar()->showMessage(msg);
+
+            break;
+        }
+        case ROTATE:
+        {            
+            const float fValue = fdx + fdy; // very naive
+
+            x.rotate(fValue);
+
+            QString msg;
+            msg.sprintf("Rotating %.2f degrees", fValue);
+            statusBar()->showMessage(msg);
+
+            break;
+        }
+        case SCALE:
+        {
+            const float dW = fdx / canvas->GetPixmap().width();
+            const float dH = fdy / canvas->GetPixmap().height();
+            const float xScale = 1.0f + dW;
+            const float yScale = 1.0f + dH;
+            x.scale(xScale, yScale);
+
+            // TODO avoid shearing
+
+            QString msg;
+            msg.sprintf("scaling (%.2f,%.2f)", xScale, yScale);
+            statusBar()->showMessage(msg);
+
+            break;
+        }
+        }
+        xformPending = xformPending * x;
+        canvas->Transform(xformPending);
+    }
+    lastMousePos = e->pos();
+}
+
+void ImageViewer::createActions()
+{
+    loadAct = new QAction(tr("&Load..."), this);
+    loadAct->setShortcut(tr("Ctrl+L"));
+    connect(loadAct, SIGNAL(triggered()), this, SLOT(load()));
 
     encodeAct = new QAction(tr("&Encode..."), this);
     encodeAct->setShortcut(tr("Ctrl+E"));
     connect(encodeAct, SIGNAL(triggered()), this, SLOT(encode()));
 
+    saveAct = new QAction(tr("&Save as..."), this);
+    saveAct->setShortcut(tr("Ctrl+S"));
+    connect(saveAct, SIGNAL(triggered()), this, SLOT(saveAs()));
+    saveAct->setEnabled(false);
+
     exitAct = new QAction(tr("E&xit"), this);
     exitAct->setShortcut(tr("Ctrl+Q"));
     connect(exitAct, SIGNAL(triggered()), this, SLOT(close()));
-
-    /*
-    printAct = new QAction(tr("&Print..."), this);
-    printAct->setShortcut(tr("Ctrl+P"));
-    printAct->setEnabled(false);
-    connect(printAct, SIGNAL(triggered()), this, SLOT(print()));
-
-    zoomInAct = new QAction(tr("Zoom &In (25%)"), this);
-    zoomInAct->setShortcut(tr("Ctrl++"));
-    zoomInAct->setEnabled(false);
-    connect(zoomInAct, SIGNAL(triggered()), this, SLOT(zoomIn()));
-
-    zoomOutAct = new QAction(tr("Zoom &Out (25%)"), this);
-    zoomOutAct->setShortcut(tr("Ctrl+-"));
-    zoomOutAct->setEnabled(false);
-    connect(zoomOutAct, SIGNAL(triggered()), this, SLOT(zoomOut()));
-
-    normalSizeAct = new QAction(tr("&Normal Size"), this);
-    normalSizeAct->setShortcut(tr("Ctrl+S"));
-    normalSizeAct->setEnabled(false);
-    connect(normalSizeAct, SIGNAL(triggered()), this, SLOT(normalSize()));
-
-    fitToWindowAct = new QAction(tr("&Fit to Window"), this);
-    fitToWindowAct->setEnabled(false);
-    fitToWindowAct->setCheckable(true);
-    fitToWindowAct->setShortcut(tr("Ctrl+F"));
-    connect(fitToWindowAct, SIGNAL(triggered()), this, SLOT(fitToWindow()));
-    */
 
     aboutAct = new QAction(tr("&About"), this);
     connect(aboutAct, SIGNAL(triggered()), this, SLOT(about()));
@@ -307,6 +282,12 @@ void ImageViewer::createActions()
     connect(aboutQtAct, SIGNAL(triggered()), qApp, SLOT(aboutQt()));
 
     // image controls
+    resetXFormAct = new QAction(tr("Reset"), this);
+    resetXFormAct->setIcon(QPixmap(":/images/Action Undo.png"));
+    resetXFormAct->setStatusTip(tr("Reset all transformations"));
+    resetXFormAct->setCheckable(false);
+    connect(resetXFormAct, SIGNAL(triggered()), this, SLOT(resetTransformations()));
+
     translateAct = new QAction(tr("Translate"), this);
     translateAct->setIcon(QPixmap(":/images/transform-move-icon.png"));
     translateAct->setStatusTip(tr("Translate the image"));
@@ -323,86 +304,45 @@ void ImageViewer::createActions()
     scaleAct->setIcon(QPixmap(":/images/transform-scale-icon.png"));
     scaleAct->setStatusTip(tr("Scale the image"));
     scaleAct->setCheckable(true);
-    connect(scaleAct, SIGNAL(triggered()), this, SLOT(setXFormScale()));
+    connect(scaleAct, SIGNAL(triggered()), this, SLOT(setXFormScale()));    
 }
-//! [18]
 
-//! [19]
 void ImageViewer::createMenus()
-//! [19] //! [20]
 {
     fileMenu = new QMenu(tr("&File"), this);
-    fileMenu->addAction(openAct);
+    fileMenu->addAction(loadAct);
+    fileMenu->addAction(saveAct);
     fileMenu->addAction(encodeAct);
-    //fileMenu->addAction(printAct);
     fileMenu->addSeparator();
     fileMenu->addAction(exitAct);
-
-    /*
-    viewMenu = new QMenu(tr("&View"), this);
-    viewMenu->addAction(zoomInAct);
-    viewMenu->addAction(zoomOutAct);
-    viewMenu->addAction(normalSizeAct);
-    viewMenu->addSeparator();
-    viewMenu->addAction(fitToWindowAct);
-    */
 
     helpMenu = new QMenu(tr("&Help"), this);
     helpMenu->addAction(aboutAct);
     helpMenu->addAction(aboutQtAct);
 
     menuBar()->addMenu(fileMenu);
-    //menuBar()->addMenu(viewMenu);
     menuBar()->addMenu(helpMenu);
 }
-//! [20]
 
 void ImageViewer::createToolBars()
 {
     xformToolBar = new QToolBar(tr("Transformation"), this);
+
     xformActGroup = new QActionGroup(xformToolBar);
-    xformToolBar->addAction(translateAct);
-    xformToolBar->addAction(rotateAct);
-    xformToolBar->addAction(scaleAct);
     xformActGroup->addAction(translateAct);
     xformActGroup->addAction(rotateAct);
     xformActGroup->addAction(scaleAct);
+
+    xformToolBar->addAction(translateAct);
+    xformToolBar->addAction(rotateAct);
+    xformToolBar->addAction(scaleAct);
+    xformToolBar->addSeparator();
+    xformToolBar->addAction(resetXFormAct);
+
     translateAct->setChecked(true);
+    xformControl = TRANSLATE;
 
     addToolBar(xformToolBar);
-}
 
-//! [21]
-void ImageViewer::updateActions()
-//! [21] //! [22]
-{
-    //zoomInAct->setEnabled(!fitToWindowAct->isChecked());
-    //zoomOutAct->setEnabled(!fitToWindowAct->isChecked());
-    //normalSizeAct->setEnabled(!fitToWindowAct->isChecked());
+    xformToolBar->setEnabled(false);
 }
-//! [22]
-/*
-//! [23]
-void ImageViewer::scaleImage(double factor)
-//! [23] //! [24]
-{
-    Q_ASSERT(imageLabel->pixmap());
-    scaleFactor *= factor;
-    imageLabel->resize(scaleFactor * imageLabel->pixmap()->size());
-
-    adjustScrollBar(scrollArea->horizontalScrollBar(), factor);
-    adjustScrollBar(scrollArea->verticalScrollBar(), factor);
-
-    zoomInAct->setEnabled(scaleFactor < 3.0);
-    zoomOutAct->setEnabled(scaleFactor > 0.333);
-}
-//! [24]
-*/
-//! [25]
-void ImageViewer::adjustScrollBar(QScrollBar *scrollBar, double factor)
-//! [25] //! [26]
-{
-    scrollBar->setValue(int(factor * scrollBar->value()
-                            + ((factor - 1) * scrollBar->pageStep()/2)));
-}
-//! [26]

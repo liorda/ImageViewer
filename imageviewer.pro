@@ -2,10 +2,12 @@ QT += widgets
 #qtHaveModule(printsupport): QT += printsupport
 
 HEADERS       = imageviewer.h \
-    ibf.h
+    ibf.h \
+    canvas.h
 SOURCES       = imageviewer.cpp \
                 main.cpp \
-    ibf.cpp
+    ibf.cpp \
+    canvas.cpp
 
 # install
 target.path = $$[QT_INSTALL_EXAMPLES]/widgets/widgets/imageviewer
@@ -19,4 +21,5 @@ wince*: {
 RESOURCES += \
     resources.qrc
 
-DISTFILES +=
+DISTFILES += \
+    images/Action Undo.png

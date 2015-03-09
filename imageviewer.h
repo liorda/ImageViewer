@@ -42,6 +42,8 @@
 #define IMAGEVIEWER_H
 
 #include <QMainWindow>
+#include "ibf.h"
+#include "canvas.h"
 
 QT_BEGIN_NAMESPACE
 class QAction;
@@ -53,7 +55,6 @@ class QToolButton;
 class QActionGroup;
 QT_END_NAMESPACE
 
-//! [0]
 class ImageViewer : public QMainWindow
 {
     Q_OBJECT
@@ -61,41 +62,37 @@ class ImageViewer : public QMainWindow
 public:
     ImageViewer();
     bool loadFile(const QString &);
+    bool loadFile(const IBF& ibf);
+
+private:
+    bool saveFile(const QImage& image, const QMatrix4x4& xform, const QString& name, const QString& targetFilename);
 
 private slots:
-    void open();
+    void load();
+    void saveAs();
     void encode();
-    //void print();
-    //void zoomIn();
-    //void zoomOut();
-    //void normalSize();
-    //void fitToWindow();
     void about();
 
     void setXFormTranslation();
     void setXFormRotation();
     void setXFormScale();
+    void resetTransformations();
+
+protected:
+    void mousePressEvent(QMouseEvent *event) Q_DECL_OVERRIDE;
+    void mouseMoveEvent(QMouseEvent *event) Q_DECL_OVERRIDE;
 
 private:
     void createActions();
     void createMenus();
     void createToolBars();
-    void updateActions();
-    void scaleImage(double factor);
-    void adjustScrollBar(QScrollBar *scrollBar, double factor);
 
-    QLabel *imageLabel;
-    QScrollArea *scrollArea;
-    double scaleFactor;
+    Canvas *canvas;
 
-    QAction *openAct;
+    QAction *loadAct;
     QAction *encodeAct;
-    //QAction *printAct;
+    QAction *saveAct;
     QAction *exitAct;
-    //QAction *zoomInAct;
-    //QAction *zoomOutAct;
-    //QAction *normalSizeAct;
-    //QAction *fitToWindowAct;
     QAction *aboutAct;
     QAction *aboutQtAct;
 
@@ -103,13 +100,22 @@ private:
     QAction *translateAct;
     QAction *rotateAct;
     QAction *scaleAct;
+    QAction *resetXFormAct;
 
     QMenu *fileMenu;
-    //QMenu *viewMenu;
     QMenu *helpMenu;
 
     QToolBar* xformToolBar;
+
+    QString loadedFile;
+
+    enum XFromControl { INVALID = 0, TRANSLATE, ROTATE, SCALE };
+    enum XFromControl xformControl;
+
+    QTransform xformPending;
+
+    QPoint lastMousePos; // constantly updating
+    QPoint firstMousePos; // updated only on starting drag
 };
-//! [0]
 
 #endif

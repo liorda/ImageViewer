@@ -1,9 +1,6 @@
 #include "ibf.h"
 #include <QFile>
 
-namespace ImageViewerNS
-{
-
 IBF::IBF(const QString& IBFFilename)
 {
     if (!load(IBFFilename))
@@ -198,5 +195,3 @@ bool IBF::load(const QString &IBFFilename)
 
     return true;
 }
-
-} //namespace ImageViewerNS
