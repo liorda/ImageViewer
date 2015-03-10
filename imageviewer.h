@@ -42,6 +42,9 @@
 #define IMAGEVIEWER_H
 
 #include <QMainWindow>
+#include <QFuture>
+#include <QFutureWatcher>
+
 #include "ibf.h"
 #include "canvas.h"
 
@@ -63,15 +66,21 @@ public:
     ImageViewer();
     bool loadFile(const QString &);
     bool loadFile(const IBF& ibf);
+    static IBF* LoadFromDisk(const QString& filename);
 
 private:
-    bool saveFile(const QImage& image, const QMatrix4x4& xform, const QString& name, const QString& targetFilename);
+    QFutureWatcher<IBF*> ibfLoadedFutureWatcher;
+
+private:
+    bool saveFile(const QImage& image, const QMatrix4x4& xform, const QString& name, const QString& targetFilename);    
 
 private slots:
     void load();
     void saveAs();
     void encode();
     void about();
+
+    Q_SLOT void ibLoadFinished();
 
     void setXFormTranslation();
     void setXFormRotation();

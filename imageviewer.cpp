@@ -39,11 +39,12 @@
 ****************************************************************************/
 
 #include <QtWidgets>
+#include <QtConcurrent/QtConcurrent>
 
 #include "imageviewer.h"
 #include "ibf.h"
 
-ImageViewer::ImageViewer()
+ImageViewer::ImageViewer() : ibfLoadedFutureWatcher(this)
 {
     canvas = new Canvas;
     canvas->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
@@ -55,6 +56,8 @@ ImageViewer::ImageViewer()
 
     resize(QGuiApplication::primaryScreen()->availableSize() * 3 / 5);
 
+    connect(&ibfLoadedFutureWatcher, SIGNAL(finished()), this, SLOT(ibLoadFinished()));
+
     statusBar()->showMessage(tr("Ready"));
 
     // debug mode
@@ -64,11 +67,12 @@ ImageViewer::ImageViewer()
 bool ImageViewer::loadFile(const QString& filename)
 {
     try {
-        IBF ibf(filename);
-        if (loadFile(ibf)) {
-            loadedFile = filename;
-            return true;
-        }
+        if (ibfLoadedFutureWatcher.isRunning())
+            return false;
+        QFuture<IBF*> ibfLoadedFuture = QtConcurrent::run(LoadFromDisk, filename);
+        ibfLoadedFutureWatcher.setFuture(ibfLoadedFuture);
+        loadedFile = filename;
+        return true;
     }
     catch (...) {
         QMessageBox::information(this, QGuiApplication::applicationDisplayName(),
@@ -90,6 +94,24 @@ bool ImageViewer::loadFile(const IBF& ibf)
     saveAct->setEnabled(true);
     xformToolBar->setEnabled(true);
     return true;
+}
+
+IBF* ImageViewer::LoadFromDisk(const QString &filename)
+{
+    try {
+        IBF* ibf = new IBF(filename);
+        return ibf;
+    }
+    catch (...) {
+        return 0;
+    }
+}
+
+void ImageViewer::ibLoadFinished()
+{
+    IBF* ibf = ibfLoadedFutureWatcher.result();
+    loadFile(*ibf);
+    delete ibf;
 }
 
 bool ImageViewer::saveFile(const QImage& image, const QMatrix4x4& xform, const QString& name, const QString& targetFilename)
@@ -136,17 +158,22 @@ void ImageViewer::saveAs()
 
 void ImageViewer::encode()
 {
-    QStringList mimeTypeFilters;
-    foreach (const QByteArray &mimeTypeName, QImageReader::supportedMimeTypes())
-        mimeTypeFilters.append(mimeTypeName);
-    mimeTypeFilters.sort();
+    QMimeDatabase db;
+    QString all("All image files (");
+    foreach (const QByteArray &mimeTypeName, QImageReader::supportedMimeTypes()) {
+        QMimeType type = db.mimeTypeForName(mimeTypeName);
+        const QStringList exts = type.suffixes();
+        for (int i=0; i<exts.length(); ++i) {
+            all.append("*." + exts[i] + " ");
+        }
+    }
+    all = all.left(all.length()-1) + ")";
 
     const QStringList picturesLocations = QStandardPaths::standardLocations(QStandardPaths::PicturesLocation);
     QFileDialog dialog(this, tr("Open File"),
                        picturesLocations.isEmpty() ? QDir::currentPath() : picturesLocations.first());
     dialog.setAcceptMode(QFileDialog::AcceptOpen);
-    dialog.setMimeTypeFilters(mimeTypeFilters);
-    dialog.selectMimeTypeFilter("image/jpeg");
+    dialog.setNameFilter(all);
 
     if (dialog.exec() == QDialog::Accepted) {
         QString selected = dialog.selectedFiles().first();
