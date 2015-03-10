@@ -1,5 +1,5 @@
 QT += widgets
-#qtHaveModule(printsupport): QT += printsupport
+QT += concurrent
 
 HEADERS       = imageviewer.h \
     ibf.h \
