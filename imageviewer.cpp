@@ -158,17 +158,22 @@ void ImageViewer::saveAs()
 
 void ImageViewer::encode()
 {
-    QStringList mimeTypeFilters;
-    foreach (const QByteArray &mimeTypeName, QImageReader::supportedMimeTypes())
-        mimeTypeFilters.append(mimeTypeName);
-    mimeTypeFilters.sort();
+    QMimeDatabase db;
+    QString all("All image files (");
+    foreach (const QByteArray &mimeTypeName, QImageReader::supportedMimeTypes()) {
+        QMimeType type = db.mimeTypeForName(mimeTypeName);
+        const QStringList exts = type.suffixes();
+        for (int i=0; i<exts.length(); ++i) {
+            all.append("*." + exts[i] + " ");
+        }
+    }
+    all = all.left(all.length()-1) + ")";
 
     const QStringList picturesLocations = QStandardPaths::standardLocations(QStandardPaths::PicturesLocation);
     QFileDialog dialog(this, tr("Open File"),
                        picturesLocations.isEmpty() ? QDir::currentPath() : picturesLocations.first());
     dialog.setAcceptMode(QFileDialog::AcceptOpen);
-    dialog.setMimeTypeFilters(mimeTypeFilters);
-    dialog.selectMimeTypeFilter("image/jpeg");
+    dialog.setNameFilter(all);
 
     if (dialog.exec() == QDialog::Accepted) {
         QString selected = dialog.selectedFiles().first();
